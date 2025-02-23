@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Symmetric Random Walk</title>
+    <title>Symmetric Pattern Creator</title>
     <style>
         body {
             margin: 0;
@@ -17,7 +17,7 @@
         .controls {
             margin: 20px;
             display: flex;
-            gap: 10px;
+            gap: 15px;
             flex-wrap: wrap;
             justify-content: center;
             align-items: center;
@@ -40,7 +40,6 @@
         canvas {
             background: #000;
             border-radius: 4px;
-            cursor: crosshair;
         }
 
         .control-group {
@@ -61,8 +60,20 @@
             border-radius: 4px;
         }
 
+        input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+        }
+
         label {
             color: #fff;
+        }
+
+        .help {
+            margin: 10px;
+            color: #aaa;
+            font-size: 0.9em;
+            text-align: center;
         }
     </style>
 </head>
@@ -72,21 +83,36 @@
             <label for="symmetry">Symmetry:</label>
             <input type="number" id="symmetry" value="6" min="2" max="12" step="1">
         </div>
-        <button onclick="startWalk()">Clear</button>
+        <div class="control-group">
+            <label for="cursorSize">Cursor Size:</label>
+            <input type="number" id="cursorSize" value="10" min="1" max="50" step="1">
+        </div>
+        <div class="control-group">
+            <label for="mirror">Mirror:</label>
+            <input type="checkbox" id="mirror">
+        </div>
+        <button onclick="clearCanvas()">Clear</button>
         <button onclick="toggleAutoWalk()">Toggle Auto-Walk</button>
     </div>
     <canvas id="walkCanvas"></canvas>
+    <div class="help">
+        Controls: Click/Hold to draw | Arrow keys to move | Space to toggle auto-walk | C to clear
+    </div>
 
     <script>
         const canvas = document.getElementById('walkCanvas');
         const ctx = canvas.getContext('2d');
         let animationId;
         let isAutoWalking = false;
+        let isDrawing = false;
+        let cursorCanvas = document.createElement('canvas');
+        let cursorCtx = cursorCanvas.getContext('2d');
         
-        // Set canvas size
         function resizeCanvas() {
             canvas.width = Math.min(800, window.innerWidth - 40);
             canvas.height = Math.min(800, window.innerHeight - 100);
+            cursorCanvas.width = canvas.width;
+            cursorCanvas.height = canvas.height;
         }
         
         resizeCanvas();
@@ -106,7 +132,9 @@
                 this.lastY = this.y;
                 this.x = newX;
                 this.y = newY;
-                this.draw();
+                if (isDrawing) {
+                    this.draw();
+                }
             }
 
             autoStep() {
@@ -122,24 +150,20 @@
                 const centerX = canvas.width / 2;
                 const centerY = canvas.height / 2;
                 const symmetry = parseInt(document.getElementById('symmetry').value);
+                const mirror = document.getElementById('mirror').checked;
                 
-                ctx.lineWidth = 2;
+                ctx.lineWidth = parseInt(document.getElementById('cursorSize').value);
+                ctx.lineCap = 'round';
                 
-                // Draw n symmetric lines
-                for (let i = 0; i < symmetry; i++) {
-                    const angle = (i * 2 * Math.PI) / symmetry;
-                    ctx.strokeStyle = `hsl(${(this.hue + i * 360/symmetry) % 360}, 100%, 50%)`;
-                    
-                    // Calculate rotated points relative to center
-                    const dx1 = this.lastX - centerX;
-                    const dy1 = this.lastY - centerY;
-                    const dx2 = this.x - centerX;
-                    const dy2 = this.y - centerY;
+                const drawLine = (x1, y1, x2, y2, angle) => {
+                    const dx1 = x1 - centerX;
+                    const dy1 = y1 - centerY;
+                    const dx2 = x2 - centerX;
+                    const dy2 = y2 - centerY;
                     
                     const cos = Math.cos(angle);
                     const sin = Math.sin(angle);
                     
-                    // Rotate and translate points
                     const rx1 = dx1 * cos - dy1 * sin + centerX;
                     const ry1 = dx1 * sin + dy1 * cos + centerY;
                     const rx2 = dx2 * cos - dy2 * sin + centerX;
@@ -149,6 +173,25 @@
                     ctx.moveTo(rx1, ry1);
                     ctx.lineTo(rx2, ry2);
                     ctx.stroke();
+
+                    if (mirror) {
+                        // Draw mirrored line
+                        const mx1 = centerX - (rx1 - centerX);
+                        const my1 = ry1;
+                        const mx2 = centerX - (rx2 - centerX);
+                        const my2 = ry2;
+                        
+                        ctx.beginPath();
+                        ctx.moveTo(mx1, my1);
+                        ctx.lineTo(mx2, my2);
+                        ctx.stroke();
+                    }
+                };
+
+                for (let i = 0; i < symmetry; i++) {
+                    const angle = (i * 2 * Math.PI) / symmetry;
+                    ctx.strokeStyle = `hsl(${(this.hue + i * 360/symmetry) % 360}, 100%, 50%)`;
+                    drawLine(this.lastX, this.lastY, this.x, this.y, angle);
                 }
                 
                 this.hue = (this.hue + 1) % 360;
@@ -161,10 +204,11 @@
             if (isAutoWalking) {
                 walk.autoStep();
             }
+            drawCursor();
             animationId = requestAnimationFrame(animate);
         }
         
-        function startWalk() {
+        function clearCanvas() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             walk = new SymmetricWalk();
         }
@@ -176,18 +220,74 @@
             }
         }
 
-        // Handle mouse/touch interaction
-        function handlePointer(e) {
+        function drawCursor() {
+            cursorCtx.clearRect(0, 0, cursorCanvas.width, cursorCanvas.height);
             if (!isAutoWalking) {
-                const rect = canvas.getBoundingClientRect();
-                const x = e.clientX - rect.left;
-                const y = e.clientY - rect.top;
-                walk.move(x, y);
+                const size = parseInt(document.getElementById('cursorSize').value);
+                cursorCtx.beginPath();
+                cursorCtx.arc(walk.x, walk.y, size/2, 0, Math.PI * 2);
+                cursorCtx.strokeStyle = 'white';
+                cursorCtx.stroke();
             }
         }
 
-        canvas.addEventListener('pointermove', handlePointer);
-        
+        // Handle mouse/touch interaction
+        canvas.addEventListener('pointerdown', (e) => {
+            if (!isAutoWalking) {
+                isDrawing = true;
+                const rect = canvas.getBoundingClientRect();
+                walk.move(
+                    e.clientX - rect.left,
+                    e.clientY - rect.top
+                );
+            }
+        });
+
+        canvas.addEventListener('pointermove', (e) => {
+            if (!isAutoWalking) {
+                const rect = canvas.getBoundingClientRect();
+                walk.move(
+                    e.clientX - rect.left,
+                    e.clientY - rect.top
+                );
+            }
+        });
+
+        canvas.addEventListener('pointerup', () => {
+            isDrawing = false;
+        });
+
+        canvas.addEventListener('pointerleave', () => {
+            isDrawing = false;
+        });
+
+        // Keyboard controls
+        document.addEventListener('keydown', (e) => {
+            if (isAutoWalking) return;
+            
+            const step = 5;
+            switch(e.key) {
+                case 'ArrowUp':
+                    walk.move(walk.x, walk.y - step);
+                    break;
+                case 'ArrowDown':
+                    walk.move(walk.x, walk.y + step);
+                    break;
+                case 'ArrowLeft':
+                    walk.move(walk.x - step, walk.y);
+                    break;
+                case 'ArrowRight':
+                    walk.move(walk.x + step, walk.y);
+                    break;
+                case ' ':
+                    toggleAutoWalk();
+                    break;
+                case 'c':
+                    clearCanvas();
+                    break;
+            }
+        });
+
         // Start animation loop
         animate();
     </script>
