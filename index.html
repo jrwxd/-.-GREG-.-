@@ -127,12 +127,12 @@
                 this.hue = 0;
             }
             
-            move(newX, newY) {
+            move(newX, newY, force = false) {
                 this.lastX = this.x;
                 this.lastY = this.y;
                 this.x = newX;
                 this.y = newY;
-                if (isDrawing) {
+                if (isDrawing || force) {
                     this.draw();
                 }
             }
@@ -142,7 +142,8 @@
                 const stepSize = 2;
                 this.move(
                     this.x + Math.cos(angle) * stepSize,
-                    this.y + Math.sin(angle) * stepSize
+                    this.y + Math.sin(angle) * stepSize,
+                    true  // Force drawing for auto-walk
                 );
             }
             
@@ -215,6 +216,7 @@
         
         function toggleAutoWalk() {
             isAutoWalking = !isAutoWalking;
+            isDrawing = false;  // Reset drawing state when toggling auto-walk
             if (isAutoWalking && !animationId) {
                 animate();
             }
